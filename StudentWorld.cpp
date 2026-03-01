@@ -25,12 +25,19 @@ GameWorld* createStudentWorld(string assetPath)
  */
 
 StudentWorld::StudentWorld(string assetPath)
-: GameWorld(assetPath)
+: GameWorld(assetPath), m_timeLeft(0)
 {}
 
-// done
 int StudentWorld::init()
 {
+    // reset all variables
+    m_timeLeft = 2000;
+    m_nSpawnedLemmings = 0;
+    m_nDeadLemmings = 0;
+    m_nSavedLemmings = 0;
+    m_actors.clear();
+    m_toolCounts.clear();
+    
     // read current level file
     Level lev(assetPath()); // note: GameWorld provides assetPath()
     string currLevel = getCurrentLevel();
@@ -44,7 +51,12 @@ int StudentWorld::init()
         cerr << "Successfully loaded level\n";
     }
     
-    // create FloorBrick and IceMonster objects at the appropriate grid locations specified by the level data
+    string tools = lev.getTools();
+    
+    for (char c : tools) {            // initiate tool line
+        m_toolCounts[c]++;
+    }
+    
     for (int i = 0; i < 20; i++) {
         for (int j = 0; j < 20; j++) {
             Coord c(i, j);
@@ -56,22 +68,90 @@ int StudentWorld::init()
                 case Level::ice_monster:
                     m_actors.push_back(new IceMonster(this, c));
                     break;
+                case Level::lemming_factory:
+                    m_actors.push_back(new LemmingFactory(this, c));
+                    break;
+                case Level::bonfire:
+                    m_actors.push_back(new Bonfire(this, c));
+                    break;
+                case Level::trampoline:
+                    m_actors.push_back(new Trampoline(this, c));
+                    break;
+                case Level::net:
+                    m_actors.push_back(new Net(this, c));
+                    break;
+                case Level::left_one_way_door:
+                    m_actors.push_back(new OneWayDoor(this, c, true));   // isLeft = true
+                    break;
+                case Level::right_one_way_door:
+                    m_actors.push_back(new OneWayDoor(this, c, false));  // isLeft = false
+                    break;
+                case Level::lemming_exit:
+                    m_actors.push_back(new Exit(this, c));
+                    break;
+                case Level::pheromone:
+                    m_actors.push_back(new Pheromone(this, c));
+                    break;
+                case Level::spring:
+                    m_actors.push_back(new Spring(this, c));
+                    break;
+                case Level::empty:
+                    continue;
+                
             }
         }
     }
+    
+    m_player = new Player(this);
+    m_timeLeft = 2000;
+    m_nDeadLemmings = m_nSavedLemmings = m_nSpawnedLemmings = 0;
+    
     return GWSTATUS_CONTINUE_GAME;
 }
 
-// done
+// START HERE, NEXT TIME
 int StudentWorld::move()
 {
     for (int i = 0; i < m_actors.size(); i++) {
+        if (!m_actors[i]->isAlive()) // and it's dead, don't do anything (skip it)
+            continue;
         m_actors[i]->doSomething();
     }
     
+    m_timeLeft--;
+    
+    // delete dead actors here!
+    for (int i = 0; i < m_actors.size(); i++) {
+        if (!m_actors[i]->isAlive()) {   // or has been savedd
+            // delete it
+        }
+    }
+    
+    
     // This code is here merely to allow the game to build, run, and terminate after you type q
-
     setGameStatText("Game will end when you type q");
+    
+    if (m_timeLeft == 0) {
+        if (m_nSavedLemmings < 5) {
+            decLives();
+            return GWSTATUS_PLAYER_DIED;
+        } else {
+            increaseScore(0);                      // no time left on the clock!
+            playSound(SOUND_FINISHED_LEVEL);
+            return GWSTATUS_FINISHED_LEVEL;
+        }
+    }
+    
+    if (m_nDeadLemmings > 5) {
+        decLives();
+        return GWSTATUS_PLAYER_DIED;
+    } else if (m_nSavedLemmings > 5 && countLemmingsAlive() == 0 && m_nSpawnedLemmings == 10) {
+        increaseScore(m_timeLeft);
+        playSound(SOUND_FINISHED_LEVEL);
+        return GWSTATUS_FINISHED_LEVEL;
+    }
+    
+    // update display text
     
     return GWSTATUS_CONTINUE_GAME;
 }
@@ -95,6 +175,96 @@ bool StudentWorld::hasSolidBrick(Coord c) {
     return false;
 }
 
+int StudentWorld::determineAttractionDirection(Coord c_lemming) {
+    
+    vector<Coord> c_pheromones;                  // contains the coordinates of all the pheromones that are attracted by the lemming
+    for (int i = 0; i < m_actors.size(); i++) {
+        if (m_actors[i]->isAttractor()) {
+            Coord c_pheromone = m_actors[i]->getCoord();
+            
+            if (c_lemming.y != c_pheromone.y)
+                continue;
+            
+            int dx = abs(c_lemming.x - c_pheromone.x);
+            if (dx > 5 || dx == 0)
+                continue;
+            
+            c_pheromones.push_back(c_pheromone);
+        }
+    }
+    
+    int min = 6;
+    int currDir = GraphObject::none;
+    for (int i = 0; i < c_pheromones.size(); i++) {
+        int displacement = c_lemming.x - c_pheromones[i].x;
+        if (abs(displacement) < min) {
+            min = abs(displacement);
+            if (displacement < 0)   // pheromone is to the right of lemming
+                currDir = GraphObject::right;        // right = 0
+            else
+                currDir = GraphObject::left;      // left = 180
+        }
+    }
+    
+    return currDir;
+}
+
+bool StudentWorld::isClimbableAt(Coord c) {
+    for (int i = 0; i < m_actors.size(); i++) {
+        if (m_actors[i]->isClimbable()) {
+            if (m_actors[i]->getCoord() ==  c)
+                return true;
+        }
+    }
+    return false;
+}
+
+Lemming* StudentWorld::getBounceableLemmingAt(Coord c) {
+    for (int i = 0; i < m_actors.size(); i++) {
+        if (m_actors[i]->isBounceable()) {
+            if (m_actors[i]->getCoord() == c && m_actors[i]->canBeLaunched()) {
+                return static_cast<Lemming*>(m_actors[i]);
+            }
+        }
+    }
+    return nullptr;
+}
+
+bool StudentWorld::isEmpty(Coord c) {
+    for (auto a : m_actors) {
+        if (a->isAlive() && a->getCoord() == c)
+            return false;
+    }
+    return true;
+}
+
+bool StudentWorld::toolAvailable(char c) {
+    // TODO: write this function, which returns whether there's still a tool available in the inventory
+    return m_toolCounts[c] > 0;
+}
+
+void StudentWorld::consumeTool(char c) {
+    m_toolCounts[c]--;
+}
+
+void StudentWorld::placeTool(char tool, Coord c) {
+    Actor* a = nullptr;
+
+    switch (tool) {
+      case 'T': a = new Trampoline(this, c); break;
+      case 'N': a = new Net(this, c); break;
+      case 'P': a = new Pheromone(this, c); break;
+      case 'S': a = new Spring(this, c); break;
+      case '<': a = new OneWayDoor(this, c, GraphObject::left); break;
+      case '>': a = new OneWayDoor(this, c, GraphObject::right); break;
+    }
+
+    if (a != nullptr) {
+        m_actors.push_back(a);
+        m_toolCounts[tool]--;   // consume one
+    }
+}
+
 /*
  PRIVATE MEMBER FUNCTIONS START HERE
  */
@@ -106,4 +276,14 @@ string StudentWorld::getCurrentLevel() {
     else {
         return "level" + to_string(lvl) + ".txt";
     }
+}
+
+int StudentWorld::countLemmingsAlive() {
+    // need to implement this
+    return -1;
+}
+
+bool StudentWorld::isLemming() {
+    // need to implement this
+    return true;
 }
