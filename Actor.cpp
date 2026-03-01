@@ -1,11 +1,14 @@
 #include "Actor.h"
 #include "StudentWorld.h"
 
+#include <cmath>
+using namespace std;
+
 // Students:  Add code to this file, Actor.h, StudentWorld.h, and StudentWorld.cpp
 
 class StudentWorld;
 
-Actor::Actor(StudentWorld* world, int imageID, Coord startCoord) : GraphObject(imageID, startCoord), m_world(world)
+Actor::Actor(StudentWorld* world, int imageID, Coord startCoord, int dir = right) : GraphObject(imageID, startCoord, dir), m_world(world), m_alive(true)
 {}
 
 FloorBrick::FloorBrick(StudentWorld* world, Coord startCoord) : Actor(world, IID_FLOOR, startCoord)
@@ -14,9 +17,49 @@ FloorBrick::FloorBrick(StudentWorld* world, Coord startCoord) : Actor(world, IID
 IceMonster::IceMonster(StudentWorld* world, Coord startCoord) : Actor(world, IID_ICE_MONSTER, startCoord)
 {}
 
-// IMPLEMENTATIONS OF FUNCTIONS START HERE
+Player::Player(StudentWorld* world) : Actor(world, IID_PLAYER, Coord(VIEW_WIDTH/2, VIEW_HEIGHT/2))
+{}
+
+LemmingFactory::LemmingFactory(StudentWorld* world, Coord startCoord) : Actor(world, IID_LEMMING_FACTORY, startCoord)
+{}
+
+Lemming::Lemming(StudentWorld* world, Coord startCoord) : Actor(world, IID_LEMMING, startCoord), m_state(WALKING), fallDistance(0)
+{} // Normally, startCoord is the lemming factory’s Coord, since the factory spawns lemmings onto its own square.
+
+Bonfire::Bonfire(StudentWorld* world, Coord startCoord) : Actor(world, IID_BONFIRE, startCoord)
+{}
+
+Trampoline::Trampoline(StudentWorld* world, Coord startCoord) : Actor(world, IID_BONFIRE, startCoord)
+{}
+
+Net::Net(StudentWorld* world, Coord startCoord) : Actor(world, IID_NET, startCoord)
+{}
+
+OneWayDoor::OneWayDoor(StudentWorld* world, Coord startCoord, bool isLeft) : Actor (world, IID_ONE_WAY_DOOR, startCoord, isLeft ? GraphObject::left : GraphObject::right)
+{}
+
+Pheromone::Pheromone(StudentWorld* world, Coord startCoord) : Actor(world, IID_PHEROMONE, startCoord)
+{}
+
+Spring::Spring(StudentWorld* world, Coord startCoord) : Actor(world, IID_SPRING, startCoord)
+{}
+
+Exit::Exit(StudentWorld* world, Coord startCoord) : Actor(world, IID_EXIT, startCoord)
+{}
+
+// ------------------------ IMPLEMENTATIONS OF FUNCTIONS START HERE ----------------------------
 StudentWorld* Actor::world() const {
     return m_world;
+}
+
+bool Actor::isValidCoord(Coord c) {
+    if (c.x < 0 || c.x >= 20)
+        return false;
+    
+    if (c.y < 0 || c.y >= 20)
+        return false;
+    
+    return true;
 }
 
 void IceMonster::doSomething() {
@@ -46,4 +89,233 @@ On each tick, its doSomething() method should attempt to move one square in its 
       Move one square in my current direction
   }
 
+ An ice monster is not solid; it does not block movement into its square. Lemmings can step onto
+ an ice monster square, and if they do, they will be killed as described above. An ice monster is
+ not launchable from a trampoline or spring, nor is it climbable.
 */
+
+void Player::doSomething() {
+    
+    int key;
+    if (world()->getKey(key)) {
+        if (isDirection(key) && inBounds(getTargetCoord(key))) {
+            switch(key) {
+                case KEY_PRESS_UP: moveTo(getTargetCoord(up)); break;
+                case KEY_PRESS_DOWN: moveTo(getTargetCoord(down)); break;
+                case KEY_PRESS_LEFT: moveTo(getTargetCoord(left)); break;
+                case KEY_PRESS_RIGHT: moveTo(getTargetCoord(right)); break;
+            }
+        } else if (isTool(key)) {
+            
+            Coord curr = getCoord();
+            if(world()->toolAvailable(key) && world()->isEmpty(curr)) {
+                world()->placeTool(key, curr);
+                world()->consumeTool(key);
+            }
+            
+        }
+    }
+}
+
+bool Player::isDirection(int value) const {
+    if (value == KEY_PRESS_UP || value == KEY_PRESS_DOWN || value == KEY_PRESS_LEFT || value == KEY_PRESS_RIGHT)
+        return true;
+    
+    return false;
+}
+
+bool Player::isTool(int value) const {
+    switch(value) {
+        case 'T':
+            return true;
+        case 'N':
+            return true;
+        case 'P':
+            return true;
+        case 'S':
+            return true;
+        case '<':
+            return true;
+        case '>':
+            return true;
+    }
+    
+    return false;
+}
+
+bool Player::inBounds(Coord c) const {
+    if (c.x < 1 || c.x > VIEW_WIDTH - 2)
+        return false;
+    
+    if (c.y < 1 || c.y > VIEW_HEIGHT - 2)
+        return false;
+    
+    return true;
+}
+
+void LemmingFactory::doSomething() {
+    
+}
+
+void Lemming::doSomething() {
+    
+    if (!isAlive() || m_state == IDLE)
+        return;
+        
+    // determine pheromone attraction
+    int newDirection = world()->determineAttractionDirection(getCoord());
+    if (newDirection != -1)
+        setDirection(newDirection);
+    
+    // coordinate definitions
+    Coord next = getTargetCoord(getDirection());
+    Coord belowNext = getTargetCoord(next, down);
+    Coord below = getTargetCoord(down);
+    Coord above = getTargetCoord(up);
+    
+    // movement
+    if (m_state == WALKING) {
+        if (!world()->returnTimeLeft() % 4 == 0)           // implement WALK
+            return;
+            
+        if (world()->isClimbableAt(getCoord())) {
+            m_state = CLIMBING;
+            return;
+        }
+        
+        if (world()->hasSolidBrick(next)) {
+            setDirection(getDirection()+180);         // reverses direction
+            return;
+        }
+        
+        if (world()->hasSolidBrick(belowNext)) {
+            moveTo(next);
+        } else {
+            m_state = FALLING;
+            fallDistance = 0;
+            moveTo(next);
+        }
+    } else if (m_state == FALLING) {                       // implement FALL
+        
+        if (!world()->returnTimeLeft() % 2 == 0)
+            return;
+        
+        if (world()->isClimbableAt(getCoord())) {
+            m_state = CLIMBING;
+            return;
+        }
+        
+        if (isValidCoord(below) && !world()->hasSolidBrick(below)) {
+            if (fallDistance > 5) {
+                setDead();
+                // TODO: see “What a Lemming Must Do When It Dies” in spec & update accordingly
+            } else {
+                m_state = WALKING;
+            }
+        } else {
+            fallDistance++;
+            moveTo(below);
+        }
+    } else if (m_state == CLIMBING ) {
+
+        if (!world()->returnTimeLeft() % 2 == 0)
+            return;
+        
+        if (!world()->isClimbableAt(getCoord())) {
+            m_state = WALKING;
+            return;
+        }
+        
+        if (isValidCoord(above) && !world()->hasSolidBrick(above)) {
+            moveTo(above);
+        }
+    } else if (m_state == BOUNCING) {
+        if (!world()->returnTimeLeft() % 2 == 0)
+            return;
+        
+        if (!world()->isClimbableAt(getCoord())) {
+            m_state = WALKING;
+            return;
+        }
+        
+        // TODO: figure out how to initiate m_upwardStepsAttempted and m_targetBounceDistance
+        // upward phase
+        while (m_targetBounceDistance - m_upwardStepsAttempted > 0) {
+            if (isValidCoord(above) && !world()->hasSolidBrick(above)) {
+                moveTo(above);
+                m_upwardStepsAttempted++;
+            } else {
+                break;
+            }
+        }
+        
+        // apex phase
+        if (isValidCoord(next) && !world()->hasSolidBrick(next)) {
+            moveTo(next);
+        } else {
+            setDirection(getDirection() + 180);
+        }
+        
+        // bounce ends immediately!
+        m_state = FALLING;
+        fallDistance = 0;
+        
+    }
+    
+    return;
+}
+
+int Lemming::getBounceHeight() const {
+    if (fallDistance - 1 < 0)
+        return 0;
+    
+    return fallDistance - 1;
+}
+
+void Lemming::launch(int bounceDist) {
+    m_targetBounceDistance = bounceDist;
+    m_upwardStepsAttempted = 0;
+    
+    m_state = BOUNCING;
+}
+
+void Bonfire::doSomething() {
+    
+}
+
+void Trampoline::doSomething() {
+    
+    Lemming* l = world()->getBounceableLemmingAt(getCoord());
+    
+    if (l == nullptr)
+        return;
+    
+    l->launch(l->getBounceHeight());
+    world()->playSound(SOUND_BOUNCE);
+}
+
+void Net::doSomething() {
+    
+}
+
+void OneWayDoor::doSomething() {
+    
+}
+
+void Pheromone::doSomething() {
+    
+}
+
+void Spring::doSomething() {
+    Lemming* l = world()->getBounceableLemmingAt(getCoord());
+    
+    if (l == nullptr)
+        return;
+    
+    l->launch(15);
+    world()->playSound(SOUND_BOUNCE);
+}
+
+void Exit::doSomething() {
+    
+}
