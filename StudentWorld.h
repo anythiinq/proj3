@@ -34,8 +34,6 @@ public:
     bool isFreezableAt(Coord c);
     bool isEmpty(Coord c);                             // returns if a square at c is empty or not (no actors at all)
     
-    map<char, int> m_toolCounts;
-    
     bool toolAvailable(char c);
     void placeTool(char tool, Coord c);
     
@@ -56,13 +54,14 @@ private:
     
     vector<Actor*> m_actors;
     Player* m_player = nullptr;
+
+    map<char, int> m_toolCounts;
     
     int m_timeLeft;
     int m_nDeadLemmings;
     int m_nSavedLemmings;
     int m_nSpawnedLemmings;
     int countLemmingsAlive();
-    bool isLemming();
 };
 
 #endif // STUDENTWORLD_H_

@@ -24,6 +24,10 @@ public:
     virtual bool isBurnable() const { return false; }
     virtual bool isFreezable() const { return false; }
     virtual bool canExit() const { return false; }
+
+    // some objects (e.g., lemmings and ice monsters) have their facing direction
+    // forcibly set when they are on a one-way door.
+    virtual bool isRedirectableByDoor() const { return false; }
     
     virtual bool canBeLaunched() const { return false; }
     bool isValidCoord(Coord c);
@@ -44,6 +48,7 @@ class IceMonster : public Actor {
 public:
     IceMonster(StudentWorld* world, Coord startCoord);
     virtual void doSomething();
+    virtual bool isRedirectableByDoor() const { return true; }
 };
 
 class Player : public Actor {
@@ -75,6 +80,7 @@ public:
     virtual bool isBurnable() const { return true; }
     virtual bool isFreezable() const { return true; }
     virtual bool canExit() const { return true; }
+    virtual bool isRedirectableByDoor() const { return true; }
     
     bool canBeLaunched() const { return m_state != BOUNCING; }
     

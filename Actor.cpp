@@ -239,19 +239,26 @@ void Lemming::doSomething() {
                 return;
             }
 
-            // still have upward steps remaining
+            // upward phase: attempt to move up until we've taken the desired number of steps.
+            // if we can't move up (blocked or out of bounds), the upward phase ends early.
+            bool upwardPhaseCompleteThisTick = false;
             if (m_upwardStepsAttempted < m_targetBounceDistance) {
-                
                 if (isValidCoord(above) && !world()->hasSolidBrick(above)) {
                     moveTo(above);
+                    m_upwardStepsAttempted++;
+                    if (m_upwardStepsAttempted >= m_targetBounceDistance)
+                        upwardPhaseCompleteThisTick = true;
+                } else {
+                    // blocked: end upward phase immediately
+                    m_upwardStepsAttempted = m_targetBounceDistance;
+                    upwardPhaseCompleteThisTick = true;
                 }
 
-                m_upwardStepsAttempted++;
-                
-                return;
+                if (!upwardPhaseCompleteThisTick)
+                    return;
             }
 
-            // upward phase complete -> apex phase (same tick)
+            // apex phase (same tick that the upward phase completes)
             next = getTargetCoord(getDirection());
             if (isValidCoord(next) && !world()->hasSolidBrick(next)) {
                 moveTo(next);
@@ -304,11 +311,9 @@ void Net::doSomething() {
 }
 
 void OneWayDoor::doSomething() {
-    if (!world()->isEmpty(getCoord())) {
-        int doorDir = getDirection();
-        // write a function that switches the actors' direction that is on the same coordinate as OneWayDoor
-        world()->switchActorDirection(getCoord(), doorDir);
-    }
+    // always attempt to redirect any redirectable actor standing on this square.
+    // (checking "empty" is unreliable because this actor itself occupies the square.)
+    world()->switchActorDirection(getCoord(), getDirection());
 }
 
 void Pheromone::doSomething() {
