@@ -20,7 +20,7 @@ IceMonster::IceMonster(StudentWorld* world, Coord startCoord) : Actor(world, IID
 Player::Player(StudentWorld* world) : Actor(world, IID_PLAYER, Coord(VIEW_WIDTH/2, VIEW_HEIGHT/2))
 {}
 
-LemmingFactory::LemmingFactory(StudentWorld* world, Coord startCoord) : Actor(world, IID_LEMMING_FACTORY, startCoord)
+LemmingFactory::LemmingFactory(StudentWorld* world, Coord startCoord) : Actor(world, IID_LEMMING_FACTORY, startCoord), m_maxLemmings(10)
 {}
 
 Lemming::Lemming(StudentWorld* world, Coord startCoord) : Actor(world, IID_LEMMING, startCoord), m_state(WALKING), fallDistance(0)
@@ -63,55 +63,45 @@ bool Actor::isValidCoord(Coord c) {
 }
 
 void IceMonster::doSomething() {
-    Coord nextCoord = getTargetCoord(getDirection());
-    if(world()->hasSolidBrick(nextCoord)) {
-        setDirection(getDirection() + 180);
-    } else if (!world()->hasSolidBrick(getTargetCoord(nextCoord, down))) {
-        setDirection(getDirection() + 180);
-    } else {
-        moveForward();
+    int currTick = world()->returnTimeLeft();
+    
+    if (world()->isFreezableAt(getCoord())) {
+        world()->freezeLemmingAt(getCoord());
+    } else if (currTick > 0 && currTick % 10 == 0) {
+        // ice monster can move
+        Coord front = getTargetCoord(getDirection());
+        if(world()->hasSolidBrick(front)) {
+            setDirection(getDirection() + 180);
+        } else if (!world()->hasSolidBrick(getTargetCoord(front, down))) {
+            setDirection(getDirection() + 180);
+        } else {
+            moveForward();
+        }
     }
+    
 }
-/*
-
-On each tick, its doSomething() method should attempt to move one square in its current horizontal direction. If moving forward would cause it to walk into a wall or step off the edge of its platform, it should reverse direction and remain in its current square for that tick.
- 
- void doSomething()
-  {
-      If a lemming is on my square, then
-      Kill the lemming
-      Else if it is time for me to move, then
-      If the square in front of me is a solid brick, then
-      Reverse my direction, but don’t move this tick
-      Else if the square in front of me has no solid ground beneath it, then
-      Reverse my direction, but don’t move this tick
-      Else
-      Move one square in my current direction
-  }
-
- An ice monster is not solid; it does not block movement into its square. Lemmings can step onto
- an ice monster square, and if they do, they will be killed as described above. An ice monster is
- not launchable from a trampoline or spring, nor is it climbable.
-*/
 
 void Player::doSomething() {
     
     int key;
     if (world()->getKey(key)) {
-        if (isDirection(key) && inBounds(getTargetCoord(key))) {
-            switch(key) {
-                case KEY_PRESS_UP: moveTo(getTargetCoord(up)); break;
-                case KEY_PRESS_DOWN: moveTo(getTargetCoord(down)); break;
-                case KEY_PRESS_LEFT: moveTo(getTargetCoord(left)); break;
-                case KEY_PRESS_RIGHT: moveTo(getTargetCoord(right)); break;
-            }
+        
+        int dir = GraphObject::none;
+        switch(key) {
+            case KEY_PRESS_UP: dir = GraphObject::up; break;
+            case KEY_PRESS_DOWN: dir = GraphObject::down; break;
+            case KEY_PRESS_LEFT: dir = GraphObject::left; break;
+            case KEY_PRESS_RIGHT: dir = GraphObject::right; break;
+        }
+        
+        if (isDirection(key) && inBounds(getTargetCoord(dir))) {
+            moveTo(getTargetCoord(dir));
+            
         } else if (isTool(key)) {
             
             Coord curr = getCoord();
-            if(world()->toolAvailable(key) && world()->isEmpty(curr)) {
+            if(world()->toolAvailable(key) && world()->isEmpty(curr)) 
                 world()->placeTool(key, curr);
-                world()->consumeTool(key);
-            }
             
         }
     }
@@ -126,13 +116,13 @@ bool Player::isDirection(int value) const {
 
 bool Player::isTool(int value) const {
     switch(value) {
-        case 'T':
+        case 'T': case 't':
             return true;
-        case 'N':
+        case 'N': case 'n':
             return true;
-        case 'P':
+        case 'P': case 'p':
             return true;
-        case 'S':
+        case 'S': case 's':
             return true;
         case '<':
             return true;
@@ -154,7 +144,12 @@ bool Player::inBounds(Coord c) const {
 }
 
 void LemmingFactory::doSomething() {
+    int currLemmings = world()->returnSpawnedLemmings();
+    int currTick = world()->returnTimeLeft();
     
+    if (currTick > 0 && currTick % 100 == 0 && currLemmings < m_maxLemmings) {
+        world()->spawnLemming(getCoord());
+    }
 }
 
 void Lemming::doSomething() {
@@ -238,7 +233,6 @@ void Lemming::doSomething() {
             return;
         }
         
-        // TODO: figure out how to initiate m_upwardStepsAttempted and m_targetBounceDistance
         // upward phase
         while (m_targetBounceDistance - m_upwardStepsAttempted > 0) {
             if (isValidCoord(above) && !world()->hasSolidBrick(above)) {
@@ -280,7 +274,7 @@ void Lemming::launch(int bounceDist) {
 }
 
 void Bonfire::doSomething() {
-    
+    world()->burnLemmingsAt(getCoord());
 }
 
 void Trampoline::doSomething() {
@@ -299,7 +293,11 @@ void Net::doSomething() {
 }
 
 void OneWayDoor::doSomething() {
-    
+    if (!world()->isEmpty(getCoord())) {
+        int doorDir = getDirection();
+        // write a function that switches the actors' direction that is on the same coordinate as OneWayDoor
+        world()->switchActorDirection(getCoord(), doorDir);
+    }
 }
 
 void Pheromone::doSomething() {
@@ -317,5 +315,5 @@ void Spring::doSomething() {
 }
 
 void Exit::doSomething() {
-    
+    world()->saveLemmingAt(getCoord());
 }
