@@ -16,6 +16,7 @@ class StudentWorld : public GameWorld
 {
 public:
     StudentWorld(std::string assetPath);
+    virtual ~StudentWorld();
     virtual int init();
     virtual int move();
     virtual void cleanUp();
@@ -54,7 +55,7 @@ private:
     string getToolsRemainingString();
     
     vector<Actor*> m_actors;
-    Player* m_player;
+    Player* m_player = nullptr;
     
     int m_timeLeft;
     int m_nDeadLemmings;
