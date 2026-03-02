@@ -2,6 +2,9 @@
 #include "GameConstants.h"
 #include "Level.h"
 #include <string>
+#include <cctype>
+#include <sstream>
+#include <iomanip>
 using namespace std;
 
 GameWorld* createStudentWorld(string assetPath)
@@ -112,6 +115,9 @@ int StudentWorld::init()
 // START HERE, NEXT TIME
 int StudentWorld::move()
 {
+    if (m_player != nullptr)
+            m_player->doSomething();
+    
     for (int i = 0; i < m_actors.size(); i++) {
         if (!m_actors[i]->isAlive()) // and it's dead, don't do anything (skip it)
             continue;
@@ -126,7 +132,6 @@ int StudentWorld::move()
             // delete it
         }
     }
-    
     
     // This code is here merely to allow the game to build, run, and terminate after you type q
     setGameStatText("Game will end when you type q");
@@ -151,7 +156,8 @@ int StudentWorld::move()
         return GWSTATUS_FINISHED_LEVEL;
     }
     
-    // update display text
+    // TODO: update display text
+    setGameStatText(builtStatText());
     
     return GWSTATUS_CONTINUE_GAME;
 }
@@ -230,6 +236,24 @@ Lemming* StudentWorld::getBounceableLemmingAt(Coord c) {
     return nullptr;
 }
 
+bool StudentWorld::isBurnableAt(Coord c) {
+    for (auto a : m_actors) {
+        if (a->isBurnable() && a->getCoord() == c)
+            return true;
+    }
+    
+    return false;
+}
+
+bool StudentWorld::isFreezableAt(Coord c) {
+    for (auto a : m_actors) {
+        if (a->isFreezable() && a->getCoord() == c)
+            return true;
+    }
+    
+    return false;
+}
+
 bool StudentWorld::isEmpty(Coord c) {
     for (auto a : m_actors) {
         if (a->isAlive() && a->getCoord() == c)
@@ -239,17 +263,14 @@ bool StudentWorld::isEmpty(Coord c) {
 }
 
 bool StudentWorld::toolAvailable(char c) {
-    // TODO: write this function, which returns whether there's still a tool available in the inventory
+    c = toupper(c);
     return m_toolCounts[c] > 0;
-}
-
-void StudentWorld::consumeTool(char c) {
-    m_toolCounts[c]--;
 }
 
 void StudentWorld::placeTool(char tool, Coord c) {
     Actor* a = nullptr;
-
+    tool = toupper(tool);
+    
     switch (tool) {
       case 'T': a = new Trampoline(this, c); break;
       case 'N': a = new Net(this, c); break;
@@ -261,7 +282,56 @@ void StudentWorld::placeTool(char tool, Coord c) {
 
     if (a != nullptr) {
         m_actors.push_back(a);
-        m_toolCounts[tool]--;   // consume one
+        m_toolCounts[tool]--;
+    }
+}
+
+void StudentWorld::spawnLemming(Coord c) {
+    m_nSpawnedLemmings++;
+    m_actors.push_back(new Lemming(this, c));
+}
+
+void StudentWorld::saveLemmingAt(Coord c) {
+    for (Actor* a : m_actors) {
+        if (a->isAlive() && a->getCoord() == c && a->canExit())
+        {
+            a->beSaved();
+            increaseScore(100);
+            m_nSavedLemmings++;
+            playSound(SOUND_LEMMING_SAVED);
+            return;
+        }
+    }
+}
+
+void StudentWorld::burnLemmingsAt(Coord c) {
+    
+    for (auto a : m_actors) {
+        if (a->isAlive() && a->isBurnable() && a->getCoord() == c) {
+            playSound(SOUND_LEMMING_DIE);
+            m_nDeadLemmings++;
+            a->setDead();
+        }
+    }
+}
+
+void StudentWorld::freezeLemmingAt(Coord c) {
+    
+    for (auto a : m_actors) {
+        if (a->isAlive() && a->isFreezable() && a->getCoord() == c) {
+            playSound(SOUND_LEMMING_DIE);
+            m_nDeadLemmings++;
+            a->setDead();
+        }
+    }
+    
+}
+
+void StudentWorld::switchActorDirection(Coord c, int dir) {
+    for (auto a : m_actors) {
+        if (a->isAlive() && a->getCoord() == c) {
+            a->setDirection(dir);
+        }
     }
 }
 
@@ -278,12 +348,43 @@ string StudentWorld::getCurrentLevel() {
     }
 }
 
+string StudentWorld::builtStatText() {
+    
+    ostringstream oss;
+    oss << "Score: " << setw(5) << setfill('0') << getScore()
+        << "  Level: " << setw(2) << setfill('0') << getLevel()
+        << "  Lives: " << setw(2) << setfill('0') << getLives()
+        << "  Saved: " << setw(2) << setfill('0') << m_nSavedLemmings
+        << "  Tools: " << getToolsRemainingString()
+        << "  Time left: " << setw(4) << setfill('0') << m_timeLeft;
+    return oss.str();
+    
+}
+
+string StudentWorld::getToolsRemainingString() {
+    
+    string s;
+
+    auto addMany = [&](char c)
+    {
+        auto it = m_toolCounts.find(c);
+        if (it != m_toolCounts.end())
+            s.append(it->second, c);
+    };
+
+    addMany('T');
+    addMany('N');
+    addMany('P');
+    addMany('S');
+    addMany('<');
+    addMany('>');
+
+    if (s.empty()) return "None";
+    return s;
+    
+}
+
 int StudentWorld::countLemmingsAlive() {
     // need to implement this
     return -1;
-}
-
-bool StudentWorld::isLemming() {
-    // need to implement this
-    return true;
 }
