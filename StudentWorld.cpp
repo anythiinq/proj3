@@ -108,6 +108,10 @@ int StudentWorld::init()
 // START HERE, NEXT TIME
 int StudentWorld::move()
 {
+    // spec: at the start of each tick, decrement the timer
+    if (m_timeLeft > 0)
+        m_timeLeft--;
+
     if (m_player != nullptr)
             m_player->doSomething();
     
@@ -116,8 +120,6 @@ int StudentWorld::move()
             continue;
         m_actors[i]->doSomething();
     }
-    m_timeLeft--;
-    
     // delete dead actors here!
     for (int i = 0; i < m_actors.size(); i++) {
         if (!m_actors[i]->isAlive()) {
@@ -126,14 +128,14 @@ int StudentWorld::move()
             i--;
         }
     }
-    
-    // This code is here merely to allow the game to build, run, and terminate after you type q
-    setGameStatText("Game will end when you type q");
-    
-    if (m_nDeadLemmings > 5) {
+
+    // always show the stat line (even on the tick we finish/die)
+    setGameStatText(builtStatText());
+
+    if (m_nDeadLemmings >= 5) {
         decLives();
         return GWSTATUS_PLAYER_DIED;
-    } else if (m_nSavedLemmings > 5 && countLemmingsAlive() == 0 && m_nSpawnedLemmings == 10) {
+    } else if (m_nSavedLemmings >= 5 && countLemmingsAlive() == 0 && m_nSpawnedLemmings == 10) {
         increaseScore(m_timeLeft);
         playSound(SOUND_FINISHED_LEVEL);
         return GWSTATUS_FINISHED_LEVEL;
@@ -149,9 +151,7 @@ int StudentWorld::move()
             return GWSTATUS_FINISHED_LEVEL;
         }
     }
-    
-    setGameStatText(builtStatText());
-    
+
     return GWSTATUS_CONTINUE_GAME;
 }
 
@@ -333,7 +333,7 @@ void StudentWorld::freezeLemmingAt(Coord c) {
 
 void StudentWorld::switchActorDirection(Coord c, int dir) {
     for (auto a : m_actors) {
-        if (a->isAlive() && a->getCoord() == c) {
+        if (a->isAlive() && a->getCoord() == c && a->isRedirectableByDoor()) {
             a->setDirection(dir);
         }
     }
