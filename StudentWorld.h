@@ -23,21 +23,34 @@ public:
     bool hasSolidBrick(Coord c);
     
     // accessors
-    int returnTimeLeft() { return m_timeLeft; }
+    int returnTimeLeft() const { return m_timeLeft; }
+    int returnSpawnedLemmings() const { return m_nSpawnedLemmings; }
     
     int determineAttractionDirection(Coord c_lemming);
     bool isClimbableAt(Coord c);
     Lemming* getBounceableLemmingAt(Coord c);
+    bool isBurnableAt(Coord c);
+    bool isFreezableAt(Coord c);
     bool isEmpty(Coord c);                             // returns if a square at c is empty or not (no actors at all)
     
     map<char, int> m_toolCounts;
     
     bool toolAvailable(char c);
-    void consumeTool(char c);
     void placeTool(char tool, Coord c);
+    
+    void spawnLemming(Coord c);
+    void saveLemmingAt(Coord c);
+    void burnLemmingsAt(Coord c);
+    void freezeLemmingAt(Coord c);
+    
+    void switchActorDirection(Coord c, int dir);
     
 private:
     string getCurrentLevel();
+    string builtStatText();
+    
+    string getToolsRemainingString();
+    
     vector<Actor*> m_actors;
     Player* m_player;
     
