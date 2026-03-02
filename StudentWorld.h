@@ -38,6 +38,8 @@ public:
     bool toolAvailable(char c);
     void placeTool(char tool, Coord c);
     
+    void incrementDeadLemmings() { m_nDeadLemmings++; }
+    
     void spawnLemming(Coord c);
     void saveLemmingAt(Coord c);
     void burnLemmingsAt(Coord c);
