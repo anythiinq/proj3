@@ -29,7 +29,7 @@ Lemming::Lemming(StudentWorld* world, Coord startCoord) : Actor(world, IID_LEMMI
 Bonfire::Bonfire(StudentWorld* world, Coord startCoord) : Actor(world, IID_BONFIRE, startCoord)
 {}
 
-Trampoline::Trampoline(StudentWorld* world, Coord startCoord) : Actor(world, IID_BONFIRE, startCoord)
+Trampoline::Trampoline(StudentWorld* world, Coord startCoord) : Actor(world, IID_TRAMPOLINE, startCoord)
 {}
 
 Net::Net(StudentWorld* world, Coord startCoord) : Actor(world, IID_NET, startCoord)
@@ -63,7 +63,7 @@ bool Actor::isValidCoord(Coord c) {
 }
 
 void IceMonster::doSomething() {
-    int currTick = world()->returnTimeLeft();
+    int currTick = 2000 - world()->returnTimeLeft();
     
     if (world()->isFreezableAt(getCoord())) {
         world()->freezeLemmingAt(getCoord());
@@ -145,7 +145,7 @@ bool Player::inBounds(Coord c) const {
 
 void LemmingFactory::doSomething() {
     int currLemmings = world()->returnSpawnedLemmings();
-    int currTick = world()->returnTimeLeft();
+    int currTick = 2000 - world()->returnTimeLeft();
     
     if (currTick > 0 && currTick % 100 == 0 && currLemmings < m_maxLemmings) {
         world()->spawnLemming(getCoord());
@@ -170,7 +170,7 @@ void Lemming::doSomething() {
     
     // movement
     if (m_state == WALKING) {
-        if (!world()->returnTimeLeft() % 4 == 0)           // implement WALK
+        if (!(world()->returnTimeLeft() % 4 == 0))           // implement WALK
             return;
             
         if (world()->isClimbableAt(getCoord())) {
@@ -192,7 +192,7 @@ void Lemming::doSomething() {
         }
     } else if (m_state == FALLING) {                       // implement FALL
         
-        if (!world()->returnTimeLeft() % 2 == 0)
+        if (!(world()->returnTimeLeft() % 2 == 0))
             return;
         
         if (world()->isClimbableAt(getCoord())) {
@@ -200,20 +200,26 @@ void Lemming::doSomething() {
             return;
         }
         
-        if (isValidCoord(below) && !world()->hasSolidBrick(below)) {
+        if (!isValidCoord(below) || world()->hasSolidBrick(below)) {
+            // landed: resolve fall
             if (fallDistance > 5) {
                 setDead();
-                // TODO: see “What a Lemming Must Do When It Dies” in spec & update accordingly
+                world()->playSound(SOUND_LEMMING_DIE);
+                world()->incrementDeadLemmings();
             } else {
-                m_state = WALKING;
+                m_state = WALKING;   // survive, don't move this tick
             }
-        } else {
-            fallDistance++;
-            moveTo(below);
+            return;
         }
+
+        // 4) otherwise keep falling
+        fallDistance++;
+        moveTo(below);
+        return;
+        
     } else if (m_state == CLIMBING ) {
 
-        if (!world()->returnTimeLeft() % 2 == 0)
+        if (!(world()->returnTimeLeft() % 2 == 0))
             return;
         
         if (!world()->isClimbableAt(getCoord())) {
@@ -225,34 +231,39 @@ void Lemming::doSomething() {
             moveTo(above);
         }
     } else if (m_state == BOUNCING) {
-        if (!world()->returnTimeLeft() % 2 == 0)
-            return;
-        
-        if (!world()->isClimbableAt(getCoord())) {
-            m_state = WALKING;
-            return;
-        }
-        
-        // upward phase
-        while (m_targetBounceDistance - m_upwardStepsAttempted > 0) {
-            if (isValidCoord(above) && !world()->hasSolidBrick(above)) {
-                moveTo(above);
-                m_upwardStepsAttempted++;
-            } else {
-                break;
+        if (world()->returnTimeLeft() % 2 != 0)
+                return;
+
+            if (world()->isClimbableAt(getCoord())) {
+                m_state = CLIMBING;
+                return;
             }
-        }
-        
-        // apex phase
-        if (isValidCoord(next) && !world()->hasSolidBrick(next)) {
-            moveTo(next);
-        } else {
-            setDirection(getDirection() + 180);
-        }
-        
-        // bounce ends immediately!
-        m_state = FALLING;
-        fallDistance = 0;
+
+            // still have upward steps remaining
+            if (m_upwardStepsAttempted < m_targetBounceDistance) {
+                
+                if (isValidCoord(above) && !world()->hasSolidBrick(above)) {
+                    moveTo(above);
+                }
+
+                m_upwardStepsAttempted++;
+                
+                return;
+            }
+
+            // upward phase complete -> apex phase (same tick)
+            next = getTargetCoord(getDirection());
+            if (isValidCoord(next) && !world()->hasSolidBrick(next)) {
+                moveTo(next);
+            } else {
+                // reverse direction without moving
+                setDirection(getDirection() == right ? left : right);
+            }
+
+            // bounce ends after apex
+            m_state = FALLING;
+            fallDistance = 0;
+            return;
         
     }
     
