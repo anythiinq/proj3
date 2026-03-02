@@ -15,21 +15,13 @@ GameWorld* createStudentWorld(string assetPath)
 // Students:  Add code to this file, StudentWorld.h, Actor.h, and Actor.cpp
 // Do not change or remove the createStudentWorld implementation above.
 
-/*
- Fourth, you must implement a limited version of the StudentWorld class. This class is
- responsible for managing the world and the actors in it. You should add whatever private data
- members are necessary to keep track of all floor bricks and ice monsters in the level. You may
- ignore all other game elements such as lemmings, exits, bonfires, tools, scoring, lives, or time
- limits for Part 1
- 
- Your StudentWorld constructor should initialize your data members, and your destructor must
- free any dynamically allocated memory that still exists when the StudentWorld object is
- destroyed.
- */
-
 StudentWorld::StudentWorld(string assetPath)
-: GameWorld(assetPath), m_timeLeft(0)
+: GameWorld(assetPath)
 {}
+
+StudentWorld::~StudentWorld() {
+    cleanUp();
+}
 
 int StudentWorld::init()
 {
@@ -131,9 +123,7 @@ int StudentWorld::move()
         if (!m_actors[i]->isAlive()) {
             delete m_actors[i];                    // free memory
             m_actors.erase(m_actors.begin() + i);  // remove pointer from vector
-        }
-        else {
-            i++;   // only increment if you did NOT erase
+            i--;
         }
     }
     
@@ -168,10 +158,21 @@ int StudentWorld::move()
 // done
 void StudentWorld::cleanUp()
 {
-    for  (int i = 0; i < m_actors.size(); i++)
-        delete m_actors[i];
-    
+    // delete all actors in the vector
+    for (Actor* a : m_actors)
+        delete a;
+
     m_actors.clear();
+
+    // delete the player cursor if you own it
+    delete m_player;
+    m_player = nullptr;
+
+    m_toolCounts.clear();
+    m_timeLeft = 0;
+    m_nSpawnedLemmings = 0;
+    m_nDeadLemmings = 0;
+    m_nSavedLemmings = 0;
 }
 
 // returns true if there is a brick at Coord c
