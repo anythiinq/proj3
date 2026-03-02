@@ -50,6 +50,7 @@ int StudentWorld::init()
         return GWSTATUS_PLAYER_WON;
     } else if (result == Level::load_fail_bad_format) {
         cerr << lev.getErrorMessage() << endl;
+        return GWSTATUS_LEVEL_ERROR;
     } else if (result == Level::load_success) {
         cerr << "Successfully loaded level\n";
     }
@@ -123,18 +124,30 @@ int StudentWorld::move()
             continue;
         m_actors[i]->doSomething();
     }
-    
     m_timeLeft--;
     
     // delete dead actors here!
     for (int i = 0; i < m_actors.size(); i++) {
-        if (!m_actors[i]->isAlive()) {   // or has been savedd
-            // delete it
+        if (!m_actors[i]->isAlive()) {
+            delete m_actors[i];                    // free memory
+            m_actors.erase(m_actors.begin() + i);  // remove pointer from vector
+        }
+        else {
+            i++;   // only increment if you did NOT erase
         }
     }
     
     // This code is here merely to allow the game to build, run, and terminate after you type q
     setGameStatText("Game will end when you type q");
+    
+    if (m_nDeadLemmings > 5) {
+        decLives();
+        return GWSTATUS_PLAYER_DIED;
+    } else if (m_nSavedLemmings > 5 && countLemmingsAlive() == 0 && m_nSpawnedLemmings == 10) {
+        increaseScore(m_timeLeft);
+        playSound(SOUND_FINISHED_LEVEL);
+        return GWSTATUS_FINISHED_LEVEL;
+    }
     
     if (m_timeLeft == 0) {
         if (m_nSavedLemmings < 5) {
@@ -147,16 +160,6 @@ int StudentWorld::move()
         }
     }
     
-    if (m_nDeadLemmings > 5) {
-        decLives();
-        return GWSTATUS_PLAYER_DIED;
-    } else if (m_nSavedLemmings > 5 && countLemmingsAlive() == 0 && m_nSpawnedLemmings == 10) {
-        increaseScore(m_timeLeft);
-        playSound(SOUND_FINISHED_LEVEL);
-        return GWSTATUS_FINISHED_LEVEL;
-    }
-    
-    // TODO: update display text
     setGameStatText(builtStatText());
     
     return GWSTATUS_CONTINUE_GAME;
@@ -238,7 +241,7 @@ Lemming* StudentWorld::getBounceableLemmingAt(Coord c) {
 
 bool StudentWorld::isBurnableAt(Coord c) {
     for (auto a : m_actors) {
-        if (a->isBurnable() && a->getCoord() == c)
+        if (a->isAlive() && a->isBurnable() && a->getCoord() == c)
             return true;
     }
     
@@ -247,7 +250,7 @@ bool StudentWorld::isBurnableAt(Coord c) {
 
 bool StudentWorld::isFreezableAt(Coord c) {
     for (auto a : m_actors) {
-        if (a->isFreezable() && a->getCoord() == c)
+        if (a->isAlive() && a->isFreezable() && a->getCoord() == c)
             return true;
     }
     
@@ -385,6 +388,5 @@ string StudentWorld::getToolsRemainingString() {
 }
 
 int StudentWorld::countLemmingsAlive() {
-    // need to implement this
-    return -1;
+    return m_nSpawnedLemmings - m_nDeadLemmings - m_nSavedLemmings;
 }
