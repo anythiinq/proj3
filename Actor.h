@@ -15,11 +15,15 @@ public:
     
     bool isAlive() { return m_alive; }
     void setDead() { m_alive = false; }
+    void beSaved() { setDead(); }
     
     virtual bool isBrick() const { return false; }
     virtual bool isAttractor() const { return false; }
     virtual bool isClimbable() const { return false; }
     virtual bool isBounceable() const { return false; }
+    virtual bool isBurnable() const { return false; }
+    virtual bool isFreezable() const { return false; }
+    virtual bool canExit() const { return false; }
     
     virtual bool canBeLaunched() const { return false; }
     bool isValidCoord(Coord c);
@@ -56,13 +60,22 @@ class LemmingFactory : public Actor {
 public:
     LemmingFactory(StudentWorld* world, Coord startCoord);
     virtual void doSomething();
+private:
+    int m_lemmingsSpawned;
+    int m_maxLemmings;
+    int m_ticksSince;
 };
 
 class Lemming : public Actor {
 public:
     Lemming(StudentWorld* world, Coord startCoord);
     virtual void doSomething();
+    
     virtual bool isBounceable() const { return true; }
+    virtual bool isBurnable() const { return true; }
+    virtual bool isFreezable() const { return true; }
+    virtual bool canExit() const { return true; }
+    
     bool canBeLaunched() const { return m_state != BOUNCING; }
     
     int getBounceHeight() const;
