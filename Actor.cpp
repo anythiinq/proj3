@@ -100,7 +100,7 @@ void Player::doSomething() {
         } else if (isTool(key)) {
             
             Coord curr = getCoord();
-            if(world()->toolAvailable(key) && world()->isEmpty(curr)) 
+            if(world()->toolAvailable(key) && world()->isEmpty(curr))
                 world()->placeTool(key, curr);
             
         }
@@ -208,6 +208,7 @@ void Lemming::doSomething() {
                 world()->incrementDeadLemmings();
             } else {
                 m_state = WALKING;   // survive, don't move this tick
+                fallDistance = 0;
             }
             return;
         }
