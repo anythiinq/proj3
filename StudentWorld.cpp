@@ -132,7 +132,7 @@ int StudentWorld::move()
     // always show the stat line (even on the tick we finish/die)
     setGameStatText(builtStatText());
 
-    if (m_nDeadLemmings >= 5) {
+    if (m_nDeadLemmings > 5) {
         decLives();
         return GWSTATUS_PLAYER_DIED;
     } else if (m_nSavedLemmings >= 5 && countLemmingsAlive() == 0 && m_nSpawnedLemmings == 10) {
